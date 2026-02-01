@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import math
+import io
 
 # Page Configuration
 st.set_page_config(page_title="Professional FD Calculator", page_icon="🏦", layout="centered")
@@ -71,6 +72,7 @@ st.markdown('<p class="main-header">Professional FD Return Calculator</p>', unsa
 st.divider()
 
 # Input Section
+user_name = st.text_input("Customer Name", placeholder="Enter your name here")
 principal = st.number_input("Principal Amount (₹)", min_value=0, value=0, step=1000)
 interest_rate = st.number_input("Interest Rate (% p.a.)", min_value=0.0, value=0.0, step=0.01)
 
@@ -108,6 +110,8 @@ if calculate:
 
             # Display Results with High Visibility
             st.markdown('<div class="result-box">', unsafe_allow_html=True)
+            if user_name:
+                st.markdown(f"<p style='color:#1c315e; font-size:20px;'>Customer: <b>{user_name}</b></p>", unsafe_allow_html=True)
             st.markdown(f"<p style='color:#1c315e; font-weight:bold;'>Total Duration: {total_days} Days</p>", unsafe_allow_html=True)
             
             m1, m2, m3 = st.columns(3)
@@ -119,6 +123,54 @@ if calculate:
                 st.success("✅ Exact Match with Bank Statement!")
             st.markdown('</div>', unsafe_allow_html=True)
             
+            # Excel Export Logic
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                # Create detailed data for Excel
+                excel_data = {
+                    "Particulars": ["Customer Name", "Principal Amount", "Interest Rate", "Start Date", "Maturity Date", "Total Days", "Compounding Frequency", "Total Interest Earned", "Maturity Value"],
+                    "Details": [user_name if user_name else "N/A", principal, f"{interest_rate}%", str(start_date), str(end_date), total_days, comp_freq, total_interest, final_maturity]
+                }
+                df_excel = pd.DataFrame(excel_data)
+                df_excel.to_excel(writer, index=False, sheet_name='FD_Advice')
+                
+                workbook  = writer.book
+                worksheet = writer.sheets['FD_Advice']
+                
+                # Professional Formatting (Green Header and Center Alignment)
+                header_format = workbook.add_format({
+                    'bold': True, 'text_wrap': True, 'valign': 'vcenter', 'align': 'center',
+                    'fg_color': '#2E7D32', 'font_color': 'white', 'border': 1
+                })
+                cell_format = workbook.add_format({
+                    'border': 1, 'align': 'center', 'valign': 'vcenter'
+                })
+                
+                # Apply formatting
+                for col_num, value in enumerate(df_excel.columns.values):
+                    worksheet.write(0, col_num, value, header_format)
+                
+                for row_num in range(1, len(excel_data["Particulars"]) + 1):
+                    for col_num in range(len(df_excel.columns)):
+                        worksheet.write_blank(row_num, col_num, None, cell_format)
+
+                worksheet.set_column('A:A', 30, cell_format)
+                worksheet.set_column('B:B', 25, cell_format)
+                
+                # Re-write data with cell format for centering
+                for row_idx, row in df_excel.iterrows():
+                    for col_idx, value in enumerate(row):
+                        worksheet.write(row_idx + 1, col_idx, value, cell_format)
+                
+                writer.close()
+            
+            st.download_button(
+                label="📥 Download Professional FD Advice (Excel)",
+                data=buffer.getvalue(),
+                file_name=f"FD_Advice_{user_name if user_name else 'Report'}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
             st.divider()
             # Visuals
             st.write("#### Growth Analysis")
